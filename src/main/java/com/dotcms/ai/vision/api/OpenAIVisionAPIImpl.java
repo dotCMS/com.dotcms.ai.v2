@@ -6,7 +6,6 @@ import com.dotcms.ai.vision.listener.OpenAIImageTaggingContentListener;
 import com.dotcms.contenttype.model.field.BinaryField;
 import com.dotcms.contenttype.model.field.Field;
 import com.dotcms.contenttype.model.field.TagField;
-import com.dotcms.contenttype.model.type.DotAssetContentType;
 import com.dotcms.rendering.velocity.util.VelocityUtil;
 import com.dotcms.security.apps.AppSecrets;
 import com.dotcms.security.apps.Secret;
@@ -37,11 +36,6 @@ import org.apache.velocity.context.Context;
 public class OpenAIVisionAPIImpl implements AIVisionAPI {
 
 
-    static final String AI_VISION_MODEL = "AI_VISION_MODEL";
-    static final String AI_VISION_MAX_TOKENS = "AI_VISION_MAX_TOKENS";
-    static final String AI_VISION_PROMPT = "AI_VISION_PROMPT";
-    static final String AI_VISION_TAG_FIELD = DotAssetContentType.TAGS_FIELD_VAR;
-    static final String AI_VISION_ALT_TEXT_VARIBLE = "altText";
     static final String[] AI_VISION_ALT_TEXT_OPTIONS = {AI_VISION_ALT_TEXT_VARIBLE, "alt", "description"};
     static final String AI_VISION_PROMPT_DEFAULT =
             "Generate appropriate alt text and keywords that describe this image.  Return your response as a valid json object with the properties `"
@@ -77,7 +71,6 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
             "resize_maxh", new String[]{"500"},
             "webp_q", new String[]{"85"}
     );
-
     Map<String, Secret> getSecrets(Contentlet contentlet) {
         return getSecrets(contentlet.getHost());
     }
@@ -88,11 +81,12 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
             return Map.of();
         }
         Optional<AppSecrets> secrets = Try.of(
-                        () -> APILocator.getAppsAPI().getSecrets("dotAI", true, host, APILocator.systemUser()))
+                        () -> APILocator.getAppsAPI().getSecrets(AppKeys.APP_KEY, true, host, APILocator.systemUser()))
                 .getOrElse(Optional.empty());
         if (secrets.isEmpty()) {
             return Map.of();
         }
+
         return secrets.get().getSecrets();
     }
 
@@ -121,7 +115,9 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
             return false;
         }
 
-        return UtilMethods.isSet(() -> getSecrets(contentlet).get(AppKeys.API_KEY).getString());
+
+
+        return !getSecrets(contentlet).isEmpty();
     }
 
     boolean shouldProcessAltText(Contentlet contentlet, Field binaryField, Field altTextField) {
@@ -137,7 +133,7 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
             return false;
         }
 
-        return UtilMethods.isSet(() -> getSecrets(contentlet).get(AppKeys.API_KEY).getString());
+        return !getSecrets(contentlet).isEmpty();
     }
 
     Optional<Field> getBinaryFieldToProcess(Contentlet contentlet) {
@@ -172,51 +168,29 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
     }
 
     @Override
-    public Contentlet addAltTextIfNeeded(Contentlet contentlet) {
+    public boolean addAltTextIfNeeded(Contentlet contentlet) {
         Optional<Field> binaryField = getBinaryFieldToProcess(contentlet);
         Optional<Field> altTextField = getAltTextField(contentlet);
         if (binaryField.isEmpty() || altTextField.isEmpty()) {
-            return contentlet;
+            return false;
         }
         return addAltTextIfNeeded(contentlet, binaryField.get(), altTextField.get());
     }
 
     @Override
-    public Contentlet addAltTextIfNeeded(Contentlet contentlet, Field binaryField, Field altTextField) {
+    public boolean addAltTextIfNeeded(Contentlet contentlet, Field binaryField, Field altTextField) {
 
         Optional<Tuple2<String, List<String>>> altAndTags = readImageTagsAndDescription(contentlet, binaryField);
 
         if (altAndTags.isEmpty()) {
-            return contentlet;
+            return false;
         }
 
         Optional<Contentlet> contentToSave = setAltText(contentlet, altTextField, altAndTags.get()._1);
-        if (contentToSave.isEmpty()) {
-            return contentlet;
-        }
-        return saveContentlet(contentlet, APILocator.systemUser());
-
+        return contentToSave.isPresent();
     }
 
-    private Contentlet saveContentlet(Contentlet contentlet, User user) {
 
-        try {
-            contentlet.setProperty(Contentlet.WORKFLOW_IN_PROGRESS, Boolean.TRUE);
-            contentlet.setProperty(Contentlet.SKIP_RELATIONSHIPS_VALIDATION, Boolean.TRUE);
-            contentlet.setProperty(Contentlet.DONT_VALIDATE_ME, Boolean.TRUE);
-
-            final boolean isPublished = APILocator.getVersionableAPI().isLive(contentlet);
-            final Contentlet savedContent = APILocator.getContentletAPI().checkin(contentlet, user, false);
-            if (isPublished) {
-                savedContent.setProperty(Contentlet.WORKFLOW_IN_PROGRESS, Boolean.TRUE);
-                savedContent.setProperty(Contentlet.SKIP_RELATIONSHIPS_VALIDATION, Boolean.TRUE);
-                savedContent.setProperty(Contentlet.DONT_VALIDATE_ME, Boolean.TRUE);
-            }
-            return savedContent;
-        } catch (Exception e) {
-            throw new DotRuntimeException(e);
-        }
-    }
 
     @Override
     public Optional<Tuple2<String, List<String>>> readImageTagsAndDescription(Contentlet contentlet,
@@ -241,23 +215,22 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
                 ctx.put("base64Image", base64EncodeImage(fileToProcess.get()));
 
                 final String parsedPrompt = VelocityUtil.eval(TAG_AND_ALT_PROMPT_TEMPLATE, ctx);
-                Logger.info(OpenAIImageTaggingContentListener.class.getCanonicalName(),
+                Logger.debug(OpenAIImageTaggingContentListener.class.getCanonicalName(),
                         "rawJSON: " + parsedPrompt.toString());
 
                 JSONObject parsedPromptJson = new JSONObject(parsedPrompt);
                 Logger.debug(this.getClass(), "parsedPromptJson: " + parsedPromptJson.toString());
-                Logger.info(OpenAIImageTaggingContentListener.class.getCanonicalName(),
-                        "parsedPromptJson: " + parsedPromptJson.toString());
+
 
                 final JSONObject openAIResponse = APILocator.getDotAIAPI()
                         .getCompletionsAPI()
                         .raw(parsedPromptJson, APILocator.systemUser().getUserId());
 
-                Logger.info(OpenAIImageTaggingContentListener.class.getName(),
+                Logger.debug(OpenAIImageTaggingContentListener.class.getName(),
                         "OpenAI Response: " + openAIResponse.toString());
 
                 final JSONObject parsedResponse = parseAIResponse(openAIResponse);
-                Logger.info(OpenAIImageTaggingContentListener.class.getName(),
+                Logger.debug(OpenAIImageTaggingContentListener.class.getName(),
                         "parsedResponse: " + parsedResponse.toString());
 
                 return Tuple.of(parsedResponse.getString(AI_VISION_ALT_TEXT_VARIBLE),
@@ -305,7 +278,7 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
         File transformedFile = IMAGE_FILTER_EXPORTER.exportContent(imageFile, new HashMap<>(this.imageResizeParameters))
                 .getDataFile();
 
-        Logger.info(OpenAIImageTaggingContentListener.class.getCanonicalName(),
+        Logger.debug(OpenAIImageTaggingContentListener.class.getCanonicalName(),
                 "Transformed file: " + transformedFile.getAbsolutePath());
 
         return java.util.Base64.getEncoder().encodeToString(Files.readAllBytes(transformedFile.toPath()));

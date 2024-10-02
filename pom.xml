@@ -49,8 +49,8 @@
             <plugin>
                 <groupId>org.apache.felix</groupId>
                 <artifactId>maven-bundle-plugin</artifactId>
-                <version>5.1.9</version>
                 <extensions>true</extensions>
+
                 <configuration>
                     <instructions>
                         <Bundle-Vendor>dotCMS</Bundle-Vendor>
@@ -58,6 +58,7 @@
                         <Bundle-DocURL>https://dotcms.com/</Bundle-DocURL>
                         <Bundle-Activator>com.dotcms.ai.vision.Activator</Bundle-Activator> <!-- Update as per your Activator's package -->
                         <Import-Package>*</Import-Package>
+                        <Export-Package>com.dotcms.ai.vision</Export-Package>
                     </instructions>
                 </configuration>
             </plugin>
