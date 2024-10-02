@@ -15,7 +15,9 @@ import java.util.concurrent.TimeUnit;
 
 public interface AIVisionAPI {
 
-    static final String AI_VISION_AUTOTAG_CONTENTTYPES ="AI_VISION_AUTOTAG_CONTENTTYPES";
+    static final String AI_VISION_AUTOTAG_CONTENTTYPES_KEY ="AI_VISION_AUTOTAG_CONTENTTYPES";
+
+    static final String AI_VISION_AUTOTAG_CONTENTTYPES_DEFAULT ="image,images";
 
     static final String AI_VISION_MODEL = "AI_VISION_MODEL";
 

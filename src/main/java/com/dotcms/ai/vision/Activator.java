@@ -1,7 +1,7 @@
 package com.dotcms.ai.vision;
 
 import com.dotcms.ai.vision.listener.OpenAIImageTaggingContentListener;
-import com.dotcms.ai.workflow.OpenAIAutoTagActionlet;
+import com.dotcms.ai.vision.workflow.OpenAIVisionAutoTagActionlet;
 import com.dotcms.contenttype.model.type.ContentType;
 import com.dotcms.contenttype.model.type.KeyValueContentType;
 import com.dotcms.languagevariable.business.LanguageVariableAPI;
@@ -28,7 +28,7 @@ public class Activator extends GenericBundleActivator {
 
     private final List<WorkFlowActionlet> actionlets = List.of(
 
-            new OpenAIAutoTagActionlet()
+            new OpenAIVisionAutoTagActionlet()
     );
 
 
@@ -46,7 +46,7 @@ public class Activator extends GenericBundleActivator {
     public void stop(BundleContext context) throws Exception {
 
         unsubscribeEmbeddingsListener();
-
+        //this.unregisterActionlets();
 
     }
 

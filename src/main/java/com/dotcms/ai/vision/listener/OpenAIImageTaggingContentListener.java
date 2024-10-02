@@ -40,7 +40,7 @@ public class OpenAIImageTaggingContentListener implements ContentletListener<Con
             return false;
         }
 
-        List<String> contentTypes=Arrays.asList(Try.of(()->secrets.get().getSecrets().get(AIVisionAPI.AI_VISION_AUTOTAG_CONTENTTYPES).getString().toLowerCase().split(",")).getOrElse(new String[] {"image"}));
+        List<String> contentTypes=Arrays.asList(Try.of(()->secrets.get().getSecrets().get(AIVisionAPI.AI_VISION_AUTOTAG_CONTENTTYPES_KEY).getString().toLowerCase().split("[\\s,]+")).getOrElse(new String[0]));
 
         String contentType = contentlet.getContentType().variable().toLowerCase();
         return contentTypes.contains(contentType);
