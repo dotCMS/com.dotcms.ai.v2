@@ -174,6 +174,10 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
         if (binaryField.isEmpty() || altTextField.isEmpty()) {
             return false;
         }
+        if(UtilMethods.isSet(()->contentlet.getStringProperty(altTextField.get().variable()))){
+            return false;
+        }
+
         return addAltTextIfNeeded(contentlet, binaryField.get(), altTextField.get());
     }
 
