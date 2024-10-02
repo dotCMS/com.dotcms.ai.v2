@@ -39,7 +39,7 @@ The OpenAI Vision Plugin is designed to automatically tag images and add alt tex
 
 1. **Set up OpenAI API Key**:
     - Navigate to the DotCMS admin panel.
-    - Go to `System -> Configuration -> Apps`.
+    - Go to `Apps` Screen and 
     - Add your OpenAI API key under the `dotAI` settings.
 
 2. **Configure Content Types**:
@@ -63,11 +63,20 @@ The plugin also includes an event listener that triggers on content publish even
 1. **Enable the Event Listener**:
     - Ensure the `OpenAIImageTaggingContentListener` is enabled in your DotCMS instance.
 
+
+
+### Configs
+
+- `AI_VISION_ALT_TEXT_OPTIONS` - Fields to write the alt text to - defaults to `altText,alt,description`
+- `AI_VISION_MODEL` - The model to use for AI vision - defaults to `gpt-4o`
+- `AI_VISION_MAX_TOKENS` - The maximum number of tokens to generate for the alt text - defaults to `500`
+- `AI_VISION_AUTOTAG_CONTENTTYPES` - The content types to auto-tag - defaults to `image`
+
+
 ## Development
 
 ### Prerequisites
 
-- IntelliJ IDEA
 - Java 11+
 - Maven
 
@@ -78,9 +87,3 @@ The plugin also includes an event listener that triggers on content publish even
     ```sh
     mvn clean install
     ```
-
-### Running Tests
-
-To run the tests, use the following Maven command:
-```sh
-mvn test

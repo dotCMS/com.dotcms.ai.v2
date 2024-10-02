@@ -2,12 +2,10 @@ package com.dotcms.ai.vision.listener;
 
 import com.dotcms.ai.app.AppKeys;
 import com.dotcms.ai.vision.api.AIVisionAPI;
-import com.dotcms.ai.vision.api.OpenAIVisionAPIImpl;
 import com.dotcms.content.elasticsearch.business.event.ContentletArchiveEvent;
 import com.dotcms.content.elasticsearch.business.event.ContentletDeletedEvent;
 import com.dotcms.content.elasticsearch.business.event.ContentletPublishEvent;
 import com.dotcms.security.apps.AppSecrets;
-import com.dotcms.security.apps.Secret;
 import com.dotcms.system.event.local.model.Subscriber;
 import com.dotmarketing.beans.Host;
 import com.dotmarketing.business.APILocator;
@@ -19,9 +17,9 @@ import com.dotmarketing.util.Logger;
 import com.dotmarketing.util.UtilMethods;
 import com.liferay.portal.model.User;
 import io.vavr.control.Try;
-import java.util.Map;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 
 public class OpenAIImageTaggingContentListener implements ContentletListener<Contentlet> {
@@ -42,26 +40,20 @@ public class OpenAIImageTaggingContentListener implements ContentletListener<Con
             return false;
         }
 
-        if(UtilMethods.isSet(()->secrets.get().getSecrets().get(AIVisionAPI.AI_VISION_AUTOTAG_CONTENTTYPES).getString())){
-            String contentType = contentlet.getContentType().variable().toLowerCase();
-            return secrets.get().getSecrets().get(AIVisionAPI.AI_VISION_AUTOTAG_CONTENTTYPES).getString().contains(contentType);
+        List<String> contentTypes=Arrays.asList(Try.of(()->secrets.get().getSecrets().get(AIVisionAPI.AI_VISION_AUTOTAG_CONTENTTYPES).getString().toLowerCase().split(",")).getOrElse(new String[] {"image"}));
 
-        }
-        return false;
+        String contentType = contentlet.getContentType().variable().toLowerCase();
+        return contentTypes.contains(contentType);
+
+
     }
+
 
 
 
     @Override
     public String getId() {
         return this.getClass().getCanonicalName();
-    }
-
-
-    @Override
-    public void onModified(ContentletPublishEvent<Contentlet> contentletPublishEvent) {
-        Contentlet contentlet = contentletPublishEvent.getContentlet();
-        logEvent("onModified ", contentlet);
     }
 
 
@@ -75,9 +67,7 @@ public class OpenAIImageTaggingContentListener implements ContentletListener<Con
 
         if (contentletPublishEvent.isPublish()) {
             try {
-                LocalTransaction.wrap(() -> {
-                    aiVisionAPI.tagImageIfNeeded(contentlet);
-                });
+                LocalTransaction.wrap(() -> aiVisionAPI.tagImageIfNeeded(contentlet));
 
                 LocalTransaction.wrap(() -> {
                    if(aiVisionAPI.addAltTextIfNeeded(contentlet)) {
@@ -86,7 +76,6 @@ public class OpenAIImageTaggingContentListener implements ContentletListener<Con
                 });
 
             } catch (Exception e) {
-                e.printStackTrace();
                 Logger.error(this, "Error tagging contentlet", e);
             }
 
@@ -98,22 +87,8 @@ public class OpenAIImageTaggingContentListener implements ContentletListener<Con
     }
 
 
-    @Subscriber
-    @Override
-    public void onArchive(ContentletArchiveEvent<Contentlet> contentletArchiveEvent) {
-        Contentlet contentlet = contentletArchiveEvent.getContentlet();
-        logEvent("onArchive", contentlet);
 
-    }
 
-    @Subscriber
-    @Override
-    public void onDeleted(ContentletDeletedEvent<Contentlet> contentletDeletedEvent) {
-
-        Contentlet contentlet = contentletDeletedEvent.getContentlet();
-        logEvent("onDeleted", contentlet);
-
-    }
 
     private Contentlet saveContentlet(Contentlet contentlet, User user) {
 
@@ -136,8 +111,7 @@ public class OpenAIImageTaggingContentListener implements ContentletListener<Con
     }
 
     void logEvent(String eventType, Contentlet contentlet) {
-        System.out.println(
-                "GOT " + eventType + " for content: " + contentlet.getTitle() + " id:" + contentlet.getIdentifier());
+        //System.out.println(  "GOT " + eventType + " for content: " + contentlet.getTitle() + " id:" + contentlet.getIdentifier());
         Logger.info(OpenAIImageTaggingContentListener.class,
                 "GOT " + eventType + " for content: " + contentlet.getTitle() + " id:" + contentlet.getIdentifier());
     }

@@ -21,11 +21,12 @@ public class OpenAIVisionAutoTagActionlet extends WorkFlowActionlet {
 
     private static final long serialVersionUID = 1L;
     AIVisionAPI aiVisionAPI = AIVisionAPI.instance.get();
+
     @Override
     public List<WorkflowActionletParameter> getParameters() {
         return List.of(
                 new WorkflowActionletParameter("contentTypes",
-                        "A comma separated list of content types with images to Auto-Tag", "image", true)
+                        "A comma separated list of content types with images to Auto-Tag", "images", true)
 
         );
     }
