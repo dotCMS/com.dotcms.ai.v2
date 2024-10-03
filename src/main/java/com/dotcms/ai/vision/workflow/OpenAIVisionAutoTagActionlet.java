@@ -1,6 +1,7 @@
 package com.dotcms.ai.vision.workflow;
 
 import com.dotcms.ai.vision.api.AIVisionAPI;
+import com.dotcms.contenttype.model.field.Field;
 import com.dotmarketing.business.APILocator;
 import com.dotmarketing.portlets.workflows.actionlet.PublishContentActionlet;
 import com.dotmarketing.portlets.workflows.actionlet.SaveContentActionlet;
@@ -23,12 +24,7 @@ public class OpenAIVisionAutoTagActionlet extends WorkFlowActionlet {
 
     @Override
     public List<WorkflowActionletParameter> getParameters() {
-        return List.of(
-                new WorkflowActionletParameter("contentTypes",
-                        "A comma separated list of content types with images to Auto-Tag",
-                        AIVisionAPI.AI_VISION_AUTOTAG_CONTENTTYPES_DEFAULT, true)
-
-        );
+        return List.of();
     }
 
     @Override
@@ -38,7 +34,7 @@ public class OpenAIVisionAutoTagActionlet extends WorkFlowActionlet {
 
     @Override
     public String getHowTo() {
-        return "This will attempt to Auto-tag and add alt tag descriptions to your images.  You will need to make sure this runs before the save/publish Content actionlet.";
+        return "This will attempt to Auto-tag and add alt tag descriptions to your images based on field variables.  You will need to make sure this runs before the save/publish Content actionlet.";
     }
 
 
@@ -46,7 +42,14 @@ public class OpenAIVisionAutoTagActionlet extends WorkFlowActionlet {
     public void executeAction(WorkflowProcessor processor, Map<String, WorkflowActionClassParameter> params)
             throws WorkflowActionFailureException {
 
-        String[] contentTypes = params.get("contentTypes").getValue().toLowerCase().split("[\\s,]+");
+
+        Optional<Field> altField = processor.getContentlet().getContentType().fields().stream().filter(f -> f.fieldVariablesMap().containsKey(AIVisionAPI.AI_VISION_ALT_FIELD_VAR)).findFirst();
+        Optional<Field> tagField = processor.getContentlet().getContentType().fields().stream().filter(f -> f.fieldVariablesMap().containsKey(AIVisionAPI.AI_VISION_TAG_FIELD_VAR)).findFirst();
+        if(altField.isEmpty() && tagField.isEmpty()){
+            return;
+        }
+
+
         String myType = processor.getContentlet().getContentType().variable().toLowerCase();
 
         Optional<WorkflowActionClass> clazz = Try.of(() ->
@@ -57,7 +60,7 @@ public class OpenAIVisionAutoTagActionlet extends WorkFlowActionlet {
                                 .findFirst())
                 .getOrElse(Optional.empty());
 
-        if (clazz.isPresent() && contentTypes.length > 0 && Arrays.asList(contentTypes).contains(myType)) {
+        if (clazz.isPresent() ) {
             aiVisionAPI.tagImageIfNeeded(processor.getContentlet());
             aiVisionAPI.addAltTextIfNeeded(processor.getContentlet());
 

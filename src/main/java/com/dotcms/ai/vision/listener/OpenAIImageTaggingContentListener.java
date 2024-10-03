@@ -5,6 +5,7 @@ import com.dotcms.ai.vision.api.AIVisionAPI;
 import com.dotcms.content.elasticsearch.business.event.ContentletArchiveEvent;
 import com.dotcms.content.elasticsearch.business.event.ContentletDeletedEvent;
 import com.dotcms.content.elasticsearch.business.event.ContentletPublishEvent;
+import com.dotcms.contenttype.model.field.Field;
 import com.dotcms.security.apps.AppSecrets;
 import com.dotcms.system.event.local.model.Subscriber;
 import com.dotmarketing.beans.Host;
@@ -43,8 +44,13 @@ public class OpenAIImageTaggingContentListener implements ContentletListener<Con
         List<String> contentTypes=Arrays.asList(Try.of(()->secrets.get().getSecrets().get(AIVisionAPI.AI_VISION_AUTOTAG_CONTENTTYPES_KEY).getString().toLowerCase().split("[\\s,]+")).getOrElse(new String[0]));
 
         String contentType = contentlet.getContentType().variable().toLowerCase();
-        return contentTypes.contains(contentType);
+        if(contentTypes.contains(contentType)){
+            return true;
+        }
 
+        Optional<Field> altField = contentlet.getContentType().fields().stream().filter(f -> f.fieldVariablesMap().containsKey(AIVisionAPI.AI_VISION_ALT_FIELD_VAR)).findFirst();
+        Optional<Field> tagField = contentlet.getContentType().fields().stream().filter(f -> f.fieldVariablesMap().containsKey(AIVisionAPI.AI_VISION_TAG_FIELD_VAR)).findFirst();
+        return altField.isPresent() || tagField.isPresent();
 
     }
 
