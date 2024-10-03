@@ -41,27 +41,25 @@ The OpenAI Vision Plugin is designed to automatically tag images and add alt tex
     - Navigate to the DotCMS admin panel.
     - Go to `Apps` Screen and 
     - Add your OpenAI API key under the `dotAI` settings.
+    - **Important:** Make sure you set dotAI to use a model that supports AI vision (gpt-4o, etc).
 
-2. **Configure Content Types**:
-    - Define which content types should be auto-tagged and have alt text added.
-    - This can be done in the workflow actionlet or in the dotAI App by setting a  property called `AI_VISION_AUTOTAG_CONTENTTYPES` with a comma-separated list of content types that you wat to auto-tag.
+2. **Configure Auto Tagging**:
+    - dotAI uses two field variables, `dotAITagSrc` and `dotAIAltTextSrc`, which determine which image should be read to auto-tag and auto alt text.  The value of the variables is the field you want to use as the source image to be read.
+    - Edit the content type you want to auto-tag or auto alt text.
+    - Auto-tagging: add a field variable property called `dotAITagSrc` on a tag field with the variable name of the image field that should be tagged.  For example, in a `dotAsset` content type, you would a field variable property to the `tags` field called `dotAITagSrc` with a value of `asset`.
+    - Auto-Alt-Text: add a field variable property called `dotAIAltTextSrc` that points to the variable name of the image field that should be read for alt text.  For example, in a `dotAsset` content type, you can add a description text field called `altText` and would add a field variable property to it `dotAIAltTextSrc` with a value of `asset`.
 
-## Usage
+
+### Tagging Content on Publish
+The plugin provides a ContentListener that will auto-tag/auto-alt-text images when content of a type that has configured fields is published.  
 
 ### Workflow Actionlet
-
-The plugin provides a workflow actionlet that can be added to your workflows to automatically tag and add alt text to images.
+The plugin also provides a workflow action that will auto-tag content as well if the content is of a type that has been configured. You can add it to the workflow action you want to trigger the auto-tagging/auto-alt-text in. Please be sure to add it before the saving/publishing step in your workflow action.
 
 1. **Add the Actionlet to a Workflow**:
     - Go to `Workflow` portlet.
     - Edit the desired workflow and add the `Open AI Auto-Tag Images` actionlet to the appropriate steps.
 
-### Event Listener
-
-The plugin also includes an event listener that triggers on content publish events.
-
-1. **Enable the Event Listener**:
-    - Ensure the `OpenAIImageTaggingContentListener` is enabled in your DotCMS instance.
 
 
 

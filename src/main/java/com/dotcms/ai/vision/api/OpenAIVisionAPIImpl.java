@@ -325,13 +325,10 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
                 return contentlet.getBinary(field.variable());
             }
 
-            Identifier identifier = APILocator.getIdentifierAPI().find(contentlet.getStringProperty(field.variable()));
-            if (identifier == null) {
-                return null;
-            }
-            Optional<ContentletVersionInfo> cvi = APILocator.getVersionableAPI().getContentletVersionInfo(identifier.getId(), contentlet.getLanguageId());
+            String id = contentlet.getStringProperty(field.variable());
+            Optional<ContentletVersionInfo> cvi = APILocator.getVersionableAPI().getContentletVersionInfo(id, contentlet.getLanguageId());
             if(cvi.isEmpty() && contentlet.getLanguageId()== APILocator.getLanguageAPI().getDefaultLanguage().getId()) {
-                cvi = APILocator.getVersionableAPI().getContentletVersionInfo(identifier.getId(), APILocator.getLanguageAPI().getDefaultLanguage().getId());
+                cvi = APILocator.getVersionableAPI().getContentletVersionInfo(id, APILocator.getLanguageAPI().getDefaultLanguage().getId());
             }
             if(cvi.isEmpty()) {
                 return null;
