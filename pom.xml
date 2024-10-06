@@ -5,7 +5,7 @@
 
     <groupId>com.dotcms.ai</groupId>
     <artifactId>vision</artifactId> <!-- Update artifactId to match your AOP project -->
-    <version>0.3</version>
+    <version>0.4.1</version>
     <packaging>bundle</packaging>
 
     <properties>

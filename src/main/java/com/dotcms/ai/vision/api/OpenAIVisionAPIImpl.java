@@ -1,26 +1,22 @@
 package com.dotcms.ai.vision.api;
 
 import com.dotcms.ai.app.AppKeys;
+import com.dotcms.ai.util.AIUtil;
 import com.dotcms.ai.util.VelocityContextFactory;
 import com.dotcms.ai.vision.listener.OpenAIImageTaggingContentListener;
 import com.dotcms.contenttype.model.field.BinaryField;
 import com.dotcms.contenttype.model.field.Field;
-import com.dotcms.contenttype.model.field.FileField;
-import com.dotcms.contenttype.model.field.ImageField;
 import com.dotcms.contenttype.model.field.TagField;
 import com.dotcms.contenttype.model.type.DotAssetContentType;
 import com.dotcms.rendering.velocity.util.VelocityUtil;
-import com.dotcms.repackage.com.sun.jna.platform.win32.WinUser.HOOKPROC;
 import com.dotcms.security.apps.AppSecrets;
 import com.dotcms.security.apps.Secret;
 import com.dotmarketing.beans.Host;
-import com.dotmarketing.beans.Identifier;
 import com.dotmarketing.business.APILocator;
 import com.dotmarketing.exception.DotRuntimeException;
 import com.dotmarketing.portlets.contentlet.business.exporter.ImageFilterExporter;
 import com.dotmarketing.portlets.contentlet.model.Contentlet;
 import com.dotmarketing.portlets.contentlet.model.ContentletVersionInfo;
-import com.dotmarketing.portlets.fileassets.business.FileAsset;
 import com.dotmarketing.portlets.fileassets.business.FileAssetAPI;
 import com.dotmarketing.util.Logger;
 import com.dotmarketing.util.UtilMethods;
@@ -31,6 +27,7 @@ import io.vavr.Tuple;
 import io.vavr.Tuple2;
 import io.vavr.control.Try;
 import java.io.File;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
@@ -47,32 +44,7 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
     static final String AI_VISION_ALT_TEXT_VARIABLE = "altText";
     static final String AI_VISION_TAG_FIELD = DotAssetContentType.TAGS_FIELD_VAR;
 
-    static final String AI_VISION_PROMPT_DEFAULT =
-            "Generate appropriate alt text and keywords that describe this image.  Return your response as a valid json object with the properties `"
-                    + AI_VISION_ALT_TEXT_VARIABLE + "` and `" + AI_VISION_TAG_FIELD
-                    + "` where `" + AI_VISION_TAG_FIELD + "` is an array of the keywords.";
-
     static final String TAGGED_BY_DOTAI = "dot:taggedByDotAI";
-
-    static final String DEFAULT_PROMPT_TEMPLATE = "{  \"model\": \"${visionModel}\",\n"
-            + "  \"messages\": [\n"
-            + "    {\n"
-            + "      \"role\": \"user\",\n"
-            + "      \"content\": [\n"
-            + "        {\n"
-            + "          \"type\": \"text\",\n"
-            + "          \"text\": \"${visionPrompt}\"\n"
-            + "        },\n"
-            + "        {\n"
-            + "          \"type\": \"image_url\",\n"
-            + "          \"image_url\": {\n"
-            + "            \"url\": \"data:image/webp;base64,${base64Image}\"\n"
-            + "          }\n"
-            + "        }\n"
-            + "      ]\n"
-            + "    }\n"
-            + "  ],\n"
-            + "  \"max_tokens\": ${maxTokens} }";
 
     static final ImageFilterExporter IMAGE_FILTER_EXPORTER = new ImageFilterExporter();
 
@@ -87,24 +59,6 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
             "webp_q", new String[]{"85"}
     );
 
-    Map<String, Secret> getSecrets(Contentlet contentlet) {
-        return getSecrets(contentlet.getHost());
-    }
-
-    Map<String, Secret> getSecrets(String hostId) {
-        Host host = Try.of(() -> APILocator.getHostAPI().find(hostId, APILocator.systemUser(), true)).getOrNull();
-        if (UtilMethods.isEmpty(() -> host.getIdentifier())) {
-            return Map.of();
-        }
-        Optional<AppSecrets> secrets = Try.of(
-                        () -> APILocator.getAppsAPI().getSecrets(AppKeys.APP_KEY, true, host, APILocator.systemUser()))
-                .getOrElse(Optional.empty());
-        if (secrets.isEmpty()) {
-            return Map.of();
-        }
-
-        return secrets.get().getSecrets();
-    }
 
     boolean shouldProcessTags(Contentlet contentlet, Field binaryField) {
 
@@ -131,7 +85,7 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
             return false;
         }
 
-        return !getSecrets(contentlet).isEmpty();
+        return !AIUtil.getSecrets(contentlet).isEmpty();
     }
 
     boolean shouldProcessAltText(Contentlet contentlet, Field binaryField, Field altTextField) {
@@ -147,7 +101,7 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
             return false;
         }
 
-        return !getSecrets(contentlet).isEmpty();
+        return !AIUtil.getSecrets(contentlet).isEmpty();
     }
 
 
@@ -242,9 +196,8 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
             final Context ctx = VelocityContextFactory.getMockContext();
             ctx.put("visionModel", getAiVisionModel(Host.SYSTEM_HOST));
             ctx.put("maxTokens", getAiVisionMaxTokens(Host.SYSTEM_HOST));
-            ctx.put("visionPrompt", getAiVisionPrompt(Host.SYSTEM_HOST));
             ctx.put("base64Image", base64EncodeImage(imageFile));
-            return VelocityUtil.eval(getAiVisionTemplate(Host.SYSTEM_HOST), ctx);
+            return VelocityUtil.eval(getAiVisionPrompt(Host.SYSTEM_HOST), ctx);
         }).getOrNull();
         if (parsedPrompt == null) {
             return Optional.empty();
@@ -304,10 +257,9 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
         final Context ctx = VelocityContextFactory.getMockContext(contentlet, APILocator.systemUser());
         ctx.put("visionModel", getAiVisionModel(contentlet.getHost()));
         ctx.put("maxTokens", getAiVisionMaxTokens(contentlet.getHost()));
-        ctx.put("visionPrompt", getAiVisionPrompt(contentlet.getHost()));
         ctx.put("base64Image", base64EncodeImage(fileToProcess.get()));
 
-        final String prompt = Try.of(() -> VelocityUtil.eval(getAiVisionTemplate(contentlet.getHost()), ctx))
+        final String prompt = Try.of(() -> VelocityUtil.eval(getAiVisionPrompt(contentlet.getHost()), ctx))
                 .onFailure(e -> Logger.warnAndDebug(OpenAIVisionAPIImpl.class, e)).getOrNull();
         if (prompt == null) {
             return Optional.empty();
@@ -380,31 +332,32 @@ public class OpenAIVisionAPIImpl implements AIVisionAPI {
 
     String getAiVisionModel(String hostId) {
 
-        if (UtilMethods.isSet(() -> getSecrets(hostId).get(AI_VISION_MODEL).getString())) {
-            return getSecrets(hostId).get(AI_VISION_MODEL).getString();
+        if (UtilMethods.isSet(() -> AIUtil.getSecrets(hostId).get(AI_VISION_MODEL).getString())) {
+            return AIUtil.getSecrets(hostId).get(AI_VISION_MODEL).getString();
         }
         return "gpt-4o";
     }
 
     String getAiVisionMaxTokens(String hostId) {
-        if (UtilMethods.isSet(() -> getSecrets(hostId).get(AI_VISION_MAX_TOKENS).getString())) {
-            return getSecrets(hostId).get(AI_VISION_MAX_TOKENS).getString();
+        if (UtilMethods.isSet(() -> AIUtil.getSecrets(hostId).get(AI_VISION_MAX_TOKENS).getString())) {
+            return AIUtil.getSecrets(hostId).get(AI_VISION_MAX_TOKENS).getString();
         }
         return "500";
     }
 
     String getAiVisionPrompt(String hostId) {
-        if (UtilMethods.isSet(() -> getSecrets(hostId).get(AI_VISION_PROMPT).getString())) {
-            return getSecrets(hostId).get(AI_VISION_PROMPT).getString();
+        if (UtilMethods.isSet(() -> AIUtil.getSecrets(hostId).get(AI_VISION_PROMPT).getString())) {
+            return AIUtil.getSecrets(hostId).get(AI_VISION_PROMPT).getString();
         }
-        return AI_VISION_PROMPT_DEFAULT;
+
+
+        return Try.of(()->{
+            try (InputStream in = OpenAIVisionAPIImpl.class.getResourceAsStream("/default-vision-prompt.json")) {
+                return new String(in.readAllBytes());
+            }
+        }).getOrNull();
     }
-    String getAiVisionTemplate(String hostId) {
-        if (UtilMethods.isSet(() -> getSecrets(hostId).get(AI_VISITON_TAG_AND_ALT_PROMPT_TEMPLATE).getString())) {
-            return getSecrets(hostId).get(AI_VISITON_TAG_AND_ALT_PROMPT_TEMPLATE).getString();
-        }
-        return DEFAULT_PROMPT_TEMPLATE;
-    }
+
 
 
 

@@ -29,7 +29,7 @@ public class OpenAIVisionAutoTagActionlet extends WorkFlowActionlet {
 
     @Override
     public String getName() {
-        return "Auto-Tag Images- Open AI";
+        return "Open AI - Tag Images";
     }
 
     @Override

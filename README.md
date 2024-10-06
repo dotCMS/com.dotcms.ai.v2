@@ -44,10 +44,10 @@ The OpenAI Vision Plugin is designed to automatically tag images and add alt tex
     - **Important:** Make sure you set dotAI to use a model that supports AI vision (gpt-4o, etc).
 
 2. **Configure Auto Tagging**:
-    - dotAI uses two field variables, `dotAITagSrc` and `dotAIAltTextSrc`, which determine which image should be read to auto-tag and auto alt text.  The value of the variables is the field you want to use as the source image to be read.
+    - dotAI Auto Tagging looks for two field variables, `dotAITagSrc` and `dotAIDescriptionSrc`.  These determine which fields should be auto-tag/auto-alt and which image should be read as the source of those values.  The value of the variables is the field you want to use as the source image to be read.
     - Edit the content type you want to auto-tag or auto alt text.
     - Auto-tagging: add a field variable property called `dotAITagSrc` on a tag field with the variable name of the image field that should be tagged.  For example, in a `dotAsset` content type, you would a field variable property to the `tags` field called `dotAITagSrc` with a value of `asset`.
-    - Auto-Alt-Text: add a field variable property called `dotAIAltTextSrc` that points to the variable name of the image field that should be read for alt text.  For example, in a `dotAsset` content type, you can add a description text field called `altText` and would add a field variable property to it `dotAIAltTextSrc` with a value of `asset`.
+    - Auto-Alt-Text: add a field variable property called `dotAIDescriptionSrc` that points to the variable name of the image field that should be read for alt text.  For example, in a `dotAsset` content type, you can add a description text field called `altText` and would add a field variable property to it `dotAIDescriptionSrc` with a value of `asset`.
 
 
 ### Tagging Content on Publish
