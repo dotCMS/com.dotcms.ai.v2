@@ -20,6 +20,7 @@ import com.dotmarketing.util.VelocityUtil;
 import com.dotmarketing.util.json.JSONObject;
 import com.liferay.portal.model.User;
 import io.vavr.Lazy;
+import io.vavr.control.Option;
 import io.vavr.control.Try;
 import java.util.HashMap;
 import java.util.List;
@@ -35,6 +36,8 @@ public class OpenAITranslationService extends AbstractTranslationService {
     static final String AI_TRANSLATION_USER_PROMPT = "AI_TRANSLATION_USER_PROMPT";
     static final String AI_TRANSLATION_MODEL_KEY = "AI_TRANSLATION_MODEL";
     static final String AI_TRANSLATIONS_MAX_TOKENS = "AI_TRANSLATIONS_MAX_TOKENS";
+    static final String AI_TRANSLATION_TEMPERATURE ="AI_TRANSLATION_TEMPERATURE";
+    static final String AI_TRANSLATION_RESPONSE_FORMAT ="AI_TRANSLATION_RESPONSE_FORMAT";
 
     static int MAX_LANGUAGE_VARIABLE_CONTEXT = 1000;
 
@@ -135,9 +138,9 @@ public class OpenAITranslationService extends AbstractTranslationService {
         JSONObject promptJson = new JSONObject();
         promptJson.put("model", model);
 
-        String responseFormat = getResponseFormat(contentlet.getHost());
-        if (responseFormat != null) {
-            promptJson.putAll(Map.of("response_format", Map.of("type", responseFormat)));
+        Optional<String> responseFormat = getResponseFormat(contentlet.getHost());
+        if (responseFormat.isPresent()) {
+            promptJson.putAll(Map.of("response_format", Map.of("type", responseFormat.get())));
         }
 
         if (maxTokens > 0) {
@@ -307,16 +310,17 @@ public class OpenAITranslationService extends AbstractTranslationService {
         return "gpt-4o";
     }
 
-    String getResponseFormat(String hostId) {
-        if (UtilMethods.isSet(() -> AIUtil.getSecrets(hostId).get("AI_TRANSLATION_RESPONSE_FORMAT").getString())) {
-            return AIUtil.getSecrets(hostId).get("AI_TRANSLATION_RESPONSE_FORMAT").getString();
+    Optional<String> getResponseFormat(String hostId) {
+
+        if (UtilMethods.isSet(() -> AIUtil.getSecrets(hostId).get(AI_TRANSLATION_RESPONSE_FORMAT).getString())) {
+            return Optional.ofNullable(AIUtil.getSecrets(hostId).get(AI_TRANSLATION_RESPONSE_FORMAT).getString());
         }
-        return "json_object";
+        return "gpt-4o".equals(getTranslationModel(hostId)) ? Optional.of("json_object") : Optional.empty();
     }
 
     float getTemperature(String hostId) {
-        if (UtilMethods.isSet(() -> AIUtil.getSecrets(hostId).get("AI_TRANSLATION_TEMPERATURE").getString())) {
-            return Float.parseFloat(AIUtil.getSecrets(hostId).get("AI_TRANSLATION_TEMPERATURE").getString());
+        if (UtilMethods.isSet(() -> AIUtil.getSecrets(hostId).get(AI_TRANSLATION_TEMPERATURE).getString())) {
+            return Float.parseFloat(AIUtil.getSecrets(hostId).get(AI_TRANSLATION_TEMPERATURE).getString());
         }
         return 0.1f;
     }

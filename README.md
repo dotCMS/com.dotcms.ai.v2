@@ -67,17 +67,22 @@ The plugin also provides a workflow action that will auto-tag content as well if
 
 
 ## OpenAI Translations
-The plugin also provides a workflow actionlet that can use OpenAI to do translations.  You can add this actionlet to any workflow and fire it (hopefully async, as it can take awhile to complete).
+The plugin also provides a workflow actionlet that can use OpenAI to do translations.  You can add this actionlet to any workflow and fire it (hopefully async, as it can take a while to complete).
 
 By default, the actionlet will translate your `text`, `wysiwyg`, `textarea` and `storyblock` fields.  You can specify which types of fields to include when trying to translate the content. The prompt is constructed to try to prevent openAI's response from corrupting any `HTML` or `JSON` based tags found in `WYSIWYG` and `StoryBlock` fields.
 
 You can configure in the workflow action which field types you would like to auto-translate, plus which other fields (by field var) you want to always include, minus any fields you never want to auto-translate.
 
 ### Lookup table
-You can also specify which language properties you want to include to be used as a lookup table by open AI when doing the translation.   This is useful when doing domain specific translations that expect industry specific terms to be translated exactly. You can specify a language key prefix to use to load the variables from the lookup table, e.g. `translation.context.` and only variables whose key starts with that prefix, e.g. `translation.context.cms` and `translation.context.content.management` will be included in the lookup table.
+You can also specify which language properties you want to include to be used as a lookup table by Open AI when doing the translation.   This is useful when doing domain specific translations that expect industry specific terms to be translated in an exact/non-standard way. You can specify a language key prefix to use to load the language property variables for the lookup table, e.g. `translation.context.` and only variables whose key starts with that prefix, e.g. `translation.context.cms` and `translation.context.content.management` will be included in the lookup table.
 
-
-
+### Configs
+- AI_TRANSLATION_SYSTEM_PROMPT =  set in the plugin.properties file
+- AI_TRANSLATION_USER_PROMPT = set in the plugin.properties file
+- AI_TRANSLATION_MODEL_KEY = gpt-4o;
+- AI_TRANSLATIONS_MAX_TOKENS = // not set;
+- AI_TRANSLATION_TEMPERATURE = .01f
+- AI_TRANSLATION_RESPONSE_FORMAT = "json_format" // uses the new json response format.
 
 
 ## Development
