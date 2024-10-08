@@ -1,62 +1,70 @@
 package com.dotcms.ai.translation.workflow;
 
-import com.dotcms.ai.util.AIUtil;
-import com.dotcms.ai.util.VelocityContextFactory;
-import com.dotcms.ai.vision.api.OpenAIVisionAPIImpl;
+import com.dotcms.ai.translation.OpenAITranslationService;
 import com.dotcms.contenttype.model.field.Field;
-import com.dotcms.contenttype.model.type.BaseContentType;
+import com.dotcms.contenttype.transform.field.LegacyFieldTransformer;
+import com.dotcms.translate.TranslationException;
 import com.dotmarketing.business.APILocator;
-import com.dotmarketing.exception.DotRuntimeException;
+import com.dotmarketing.cache.FieldsCache;
+import com.dotmarketing.exception.DotDataException;
+import com.dotmarketing.exception.DotSecurityException;
 import com.dotmarketing.portlets.contentlet.model.Contentlet;
 import com.dotmarketing.portlets.languagesmanager.model.Language;
+import com.dotmarketing.portlets.structure.model.Structure;
+import com.dotmarketing.portlets.workflows.actionlet.Actionlet;
 import com.dotmarketing.portlets.workflows.actionlet.TranslationActionlet;
 import com.dotmarketing.portlets.workflows.model.WorkflowActionClassParameter;
 import com.dotmarketing.portlets.workflows.model.WorkflowActionFailureException;
 import com.dotmarketing.portlets.workflows.model.WorkflowActionletParameter;
 import com.dotmarketing.portlets.workflows.model.WorkflowProcessor;
+import com.dotmarketing.util.Logger;
+import com.dotmarketing.util.UUIDGenerator;
 import com.dotmarketing.util.UtilMethods;
-import com.dotmarketing.util.VelocityUtil;
-import com.dotmarketing.util.json.JSONObject;
+import com.liferay.portal.model.User;
+import com.liferay.util.FileUtil;
 import io.vavr.control.Try;
-import java.io.InputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import org.apache.velocity.context.Context;
 
+@Actionlet(onlyBatch = true)
 public class OpenAITranslationActionlet extends TranslationActionlet {
+
+
+    static final public String TRANSLATION_KEY_PREFIX = "translationkeyPrefix";
+    static final String TRANSLATE_TO = "translateTo";
+    static final String FIELD_TYPES = "fieldTypes";
+    static final String TRANSLATE_FIELDS = "translateFields";
+    static final String IGNORE_FIELDS = "ignoreFields";
+    static final String COMMA_SPLITER = "[,\\s]+";
+    static int MAX_LANGUAGE_VARIABLE_CONTEXT = 1000;
 
     @Override
     public String getName() {
         return "Open AI - Translate Content";
     }
 
-    static int MAX_LANGUAGE_VARIABLE_CONTEXT = 1000;
-
-    static final String AI_TRANSLATION_PROMPT_KEY = "AI_TRANSLATION_PROMPT";
-    static final String AI_TRANSLATION_MODEL_KEY = "AI_TRANSLATION_MODEL";
-    static final String AI_TRANSLATIONS_MAX_TOKENS = "AI_TRANSLATIONS_MAX_TOKENS";
-    static final String TRANSLATE_TO = "translateTo";
-    static final String FIELD_TYPES = "fieldTypes";
-    static final String TRANSLATE_FIELDS = "translateFields";
-    static final String IGNORE_FIELDS = "ignoreFields";
-    static final String CONTEXT_PREFIX = "contextPrefix";
-    static final String COMMA_SPLITER="[,\\s]+";
-
-
     @Override
     public List<WorkflowActionletParameter> getParameters() {
         List<WorkflowActionletParameter> params = new ArrayList<>();
-        params.add(new WorkflowActionletParameter(TRANSLATE_TO, "Translation to these languages (comma separated lang or lang-country codes or `*` for all )", "*", false));
-        params.add(new WorkflowActionletParameter(FIELD_TYPES, "Always Translate these Field types (optional, comma separated)", "text,wysiwyg,textarea,storyblock", true));
-        params.add(new WorkflowActionletParameter(TRANSLATE_FIELDS, "Then also always translate these Fields (optional, comma separated var names)", "", false));
-        params.add(new WorkflowActionletParameter(IGNORE_FIELDS, "Finally, ignore these fields (optional, comma separated var names)", "", false));
-        params.add(new WorkflowActionletParameter(CONTEXT_PREFIX, "Language variable prefix to include as glossary - this is the prefix of language variables that you want to include as glossary for the translation. Leave empty for none.  Set to `*` for all (up to " + MAX_LANGUAGE_VARIABLE_CONTEXT +").", "", false));
+        params.add(new WorkflowActionletParameter(TRANSLATE_TO,
+                "Translation to these languages (comma separated lang or lang-country codes or `*` for all )", "*",
+                false));
+        params.add(new WorkflowActionletParameter(FIELD_TYPES,
+                "Always Translate these Field types (optional, comma separated)", "text,wysiwyg,textarea,storyblock",
+                true));
+        params.add(new WorkflowActionletParameter(TRANSLATE_FIELDS,
+                "Then also always translate these Fields (optional, comma separated var names)", "", false));
+        params.add(new WorkflowActionletParameter(IGNORE_FIELDS,
+                "Finally, ignore these fields (optional, comma separated var names)", "", false));
+        params.add(new WorkflowActionletParameter(TRANSLATION_KEY_PREFIX,
+                "Language variable prefix to include as glossary - this is the prefix of language variables that you want to include as glossary for the translation. Leave empty for none.  Set to `*` for all (up to "
+                        + MAX_LANGUAGE_VARIABLE_CONTEXT + ").", "", false));
 
         return params;
     }
@@ -75,77 +83,56 @@ public class OpenAITranslationActionlet extends TranslationActionlet {
     public void executeAction(WorkflowProcessor processor, Map<String, WorkflowActionClassParameter> params)
             throws WorkflowActionFailureException {
 
-        final Contentlet contentlet = processor.getContentlet();
-
-        final Optional<String> contextPrefix = Try.of(()->params.get(CONTEXT_PREFIX).getValue().trim()).toJavaOptional();
-        final List<Language> languages = new ArrayList(languagesToTranslate(params.get(TRANSLATE_TO).getValue()));
-        languages.removeIf(lang -> lang.getId() == contentlet.getLanguageId());
-        Set<Field> fields = getIncludedFields(contentlet,
+        final Contentlet sourceContentlet = processor.getContentlet();
+        final User user = processor.getUser();
+        final Optional<String> translationKeyPrefix = Try.of(() -> params.get(TRANSLATION_KEY_PREFIX).getValue().trim())
+                .toJavaOptional();
+        final List<Language> languages = new ArrayList<>(languagesToTranslate(params.get(TRANSLATE_TO).getValue()));
+        languages.removeIf(lang -> lang.getId() == sourceContentlet.getLanguageId());
+        Set<Field> fields = getIncludedFields(sourceContentlet,
                 params.get(FIELD_TYPES).getValue(),
                 params.get(IGNORE_FIELDS).getValue(),
                 params.get(TRANSLATE_FIELDS).getValue());
 
-
-
-        for(Language lang : languages){
-
-
-            translateContentlet(contentlet, lang, fields, contextPrefix);
-
-
+        if (translationKeyPrefix.isPresent()) {
+            sourceContentlet.getMap().put(TRANSLATION_KEY_PREFIX, translationKeyPrefix.get());
         }
 
+        List<com.dotmarketing.portlets.structure.model.Field> oldFields = new LegacyFieldTransformer(
+                new ArrayList(fields)).asOldFieldList();
 
-    }
+        try {
+            List<Contentlet> translatedContents = OpenAITranslationService.INSTANCE.get()
+                    .translateContent(sourceContentlet, languages, oldFields, APILocator.systemUser());
 
-    private void translateContentlet(Contentlet contentlet, Language targetLanguage, Set<Field> fields, Optional<String> contextPrefix) {
+            final boolean live = sourceContentlet.isLive();
 
-
-        Language sourceLang = APILocator.getLanguageAPI().getLanguage(contentlet.getLanguageId());
-        Map<String,String> context = buildContext(contextPrefix, contentlet.getLanguageId(), targetLanguage.getId());
-        JSONObject contextKeyValues = new JSONObject(context);
-        JSONObject sourceJson = new JSONObject();
-        fields.forEach(f->{
-            String value = contentlet.getStringProperty(f.variable());
-            if(UtilMethods.isSet(value)){
-                sourceJson.put(f.variable(), (String) value);
+            for (final Contentlet translatedContent : translatedContents) {
+                sourceContentlet.setTags();
+                copyBinariesAndTags(processor.getUser(), sourceContentlet, translatedContent);
+                translatedContent.setProperty(Contentlet.DISABLE_WORKFLOW, true);
+                translatedContent.setProperty(Contentlet.DONT_VALIDATE_ME, true);
+                Contentlet persisted = APILocator.getContentletAPI().checkin(translatedContent, user, false);
+                if (live) {
+                    APILocator.getContentletAPI().publish(translatedContent, user, false);
+                }
+                APILocator.getContentletAPI().unlock(translatedContent, user, false);
             }
-        });
 
 
-        System.out.println("contextKeyValues: " + contextKeyValues.toString(2) + "\n\n");
-
-        System.out.println("sourceJson: " + sourceJson.toString(2) + "\n\n");
-
-
-
-
-        final Context ctx = VelocityContextFactory.getMockContext(contentlet, APILocator.systemUser());
-        ctx.put("translationModel", getTranslationModel(contentlet.getHost()));
-        ctx.put("sourceJson", sourceJson.toString());
-        if(!contextKeyValues.isEmpty()) {
-            ctx.put("contextKeyValues", contextKeyValues.toString());
-        }
-        ctx.put("sourceLanguage", sourceLang.getLanguage() + "(" + sourceLang.getCountry() +")");
-        ctx.put("targetLanguage", targetLanguage.getLanguage() + "(" + targetLanguage.getCountry() +")" );
-        ctx.put("maxTokens", getMaxTokens(contentlet.getHost()));
-        Optional<String> prompt = Try.of(()->VelocityUtil.eval(getAITranslationTemplate(contentlet.getHost()), ctx)).toJavaOptional();
-
-        if(prompt.isEmpty()){
-            throw new DotRuntimeException("Could not get translation prompt");
+        } catch (Exception e) {
+            Logger.error(this.getClass(), "Error translating contentlet:" + e.getMessage(), e);
+            throw new WorkflowActionFailureException("Error translating contentlet", e);
         }
 
-        System.out.println("prompt: " + prompt.get()+ "\n\n");
-        JSONObject promptJson = new JSONObject(prompt.get());
-
-
-        System.out.println("promptJson: " + promptJson.toString(2) + "\n\n");
 
     }
 
 
     List<Language> languagesToTranslate(String translateToIn) {
-        String translateTo = Try.of(()->"all".equalsIgnoreCase(translateToIn.trim()) || "*".equalsIgnoreCase(translateToIn.trim()) ? "" : translateToIn ).getOrNull();
+        String translateTo = Try.of(
+                () -> "all".equalsIgnoreCase(translateToIn.trim()) || "*".equalsIgnoreCase(translateToIn.trim()) ? ""
+                        : translateToIn).getOrNull();
 
         if (UtilMethods.isEmpty(translateTo)) {
             return APILocator.getLanguageAPI().getLanguages();
@@ -155,7 +142,8 @@ public class OpenAITranslationActionlet extends TranslationActionlet {
         String[] langCodes = translateTo.split(COMMA_SPLITER);
         for (String langCode : langCodes) {
             String[] langCountry = langCode.split("[_|-]");
-            Language lang = APILocator.getLanguageAPI().getLanguage(langCountry[0], langCountry.length > 1 ? langCountry[1] : null);
+            Language lang = APILocator.getLanguageAPI()
+                    .getLanguage(langCountry[0], langCountry.length > 1 ? langCountry[1] : null);
             if (lang != null) {
                 languages.add(lang);
             }
@@ -163,37 +151,36 @@ public class OpenAITranslationActionlet extends TranslationActionlet {
         return languages;
 
 
-
-
     }
 
 
+    Set<Field> getIncludedFields(Contentlet contentlet, String fieldTypesStr, String ignoreFieldsStr,
+            String translateFieldsStr) {
 
-    Set<Field> getIncludedFields(Contentlet contentlet, String fieldTypesStr, String ignoreFieldsStr, String translateFieldsStr) {
+        final List<String> fieldTypes = Try.of(() -> Arrays.asList(fieldTypesStr.trim().split(COMMA_SPLITER)))
+                .getOrElse(List.of());
 
+        final List<String> ignoreFields = Try.of(() -> Arrays.asList(ignoreFieldsStr.trim().split(COMMA_SPLITER)))
+                .getOrElse(List.of());
 
-        final List<String> fieldTypes = Try.of(()-> Arrays.asList(fieldTypesStr.trim().split(COMMA_SPLITER))).getOrElse(List.of());
-
-        final List<String> ignoreFields = Try.of(()->Arrays.asList(ignoreFieldsStr.trim().split(COMMA_SPLITER))).getOrElse(List.of());
-
-        final List<String> translateFields = Try.of(()->Arrays.asList(translateFieldsStr.trim().split(COMMA_SPLITER))).getOrElse(List.of());
+        final List<String> translateFields = Try.of(() -> Arrays.asList(translateFieldsStr.trim().split(COMMA_SPLITER)))
+                .getOrElse(List.of());
 
         Set<Field> fields = new HashSet<>();
 
-
-        for(Field f : contentlet.getContentType().fields()){
-            for(String type : fieldTypes){
-                if(f.getClass().getSimpleName().toLowerCase().contains(type + "field")){
+        for (Field f : contentlet.getContentType().fields()) {
+            for (String type : fieldTypes) {
+                if (f.getClass().getSimpleName().toLowerCase().contains(type + "field")) {
                     fields.add(f);
                 }
             }
-            for(String translate : translateFields){
-                if(f.variable().equalsIgnoreCase(translate)){
+            for (String translate : translateFields) {
+                if (f.variable().equalsIgnoreCase(translate)) {
                     fields.add(f);
                 }
             }
-            for(String ignore : ignoreFields){
-                if(f.variable().equalsIgnoreCase(ignore)){
+            for (String ignore : ignoreFields) {
+                if (f.variable().equalsIgnoreCase(ignore)) {
                     fields.remove(f);
                 }
             }
@@ -202,99 +189,53 @@ public class OpenAITranslationActionlet extends TranslationActionlet {
         return fields;
     }
 
+    void copyBinariesAndTags(final User user, final Contentlet sourceContentlet, final Contentlet translatedContent)
+            throws DotDataException, DotSecurityException, TranslationException {
 
+        final Structure structure = translatedContent.getStructure();
+        final List<com.dotmarketing.portlets.structure.model.Field> list = FieldsCache.getFieldsByStructureInode(
+                structure.getInode());
 
+        for (final com.dotmarketing.portlets.structure.model.Field field : list) {
+            if (com.dotmarketing.portlets.structure.model.Field.FieldType.BINARY.toString()
+                    .equals(field.getFieldType())) {
 
+                final java.io.File inputFile = APILocator
+                        .getContentletAPI()
+                        .getBinaryFile(sourceContentlet.getInode(), field.getVelocityVarName(), user);
+                if (inputFile != null) {
 
+                    final java.io.File acopyFolder = new java.io.File(
+                            APILocator.getFileAssetAPI().getRealAssetPathTmpBinary()
+                                    + java.io.File.separator + user.getUserId() + java.io.File.separator
+                                    + field.getFieldContentlet()
+                                    + java.io.File.separator + UUIDGenerator.generateUuid());
 
-
-    Map<String,String> buildContext(Optional<String> prefixIn, long originalLang,long langToTranslate)  {
-
-
-        if (originalLang == langToTranslate) {
-            throw new DotRuntimeException("Cannot translate contentlet to the same language: " + langToTranslate);
-        }
-
-
-        final StringBuilder query = new StringBuilder()
-                .append("+baseType:" + BaseContentType.KEY_VALUE.getType());
-        if(prefixIn.isPresent()){
-            query.append(" +key_dotraw:");
-        }
-        if(prefixIn.isEmpty() ||"*".equals(prefixIn.get())) {
-            query.append("*");
-        }
-        query.append(" +languageId:(")
-                .append(originalLang)
-                .append(" OR ")
-                .append(langToTranslate)
-                .append(") +deleted:false");
-
-
-        String queryStr = query.toString();
-
-        Map<String,String> context = new HashMap<>();
-        int limit = 1000;
-        int page = 0;
-        while (context.size() < MAX_LANGUAGE_VARIABLE_CONTEXT) {
-            int myPage = page;
-            List<Contentlet> contentResults = Try.of(()-> APILocator.getContentletAPI().search(query.toString(), limit, myPage*limit, "identifier,languageid", APILocator.systemUser(),false)).getOrElse(List.of());
-            if(contentResults.isEmpty()){
-                break;
-            }
-            for(int i=0; i<contentResults.size(); i++){
-                Contentlet workingCon = contentResults.get(i);
-                final int iPlusOne = i+1;
-                Contentlet nextCon = Try.of(()->contentResults.get(iPlusOne)).getOrNull();
-
-                if(UtilMethods.isEmpty(()->workingCon.getIdentifier()) || UtilMethods.isEmpty(()->nextCon.getIdentifier())){
-                    break;
-                }
-                if(workingCon.getIdentifier().equals(nextCon.getIdentifier())){
-                    if(workingCon.getLanguageId()==originalLang) {
-                        context.put(workingCon.getStringProperty("value"), nextCon.getStringProperty("value"));
-                    }else{
-                        context.put(nextCon.getStringProperty("value"), workingCon.getStringProperty("value"));
+                    if (!acopyFolder.exists()) {
+                        acopyFolder.mkdir();
                     }
-                    i++;
+
+                    final String shortFileName = FileUtil.getShortFileName(inputFile.getAbsolutePath());
+                    final java.io.File binaryFile = new java.io.File(
+                            APILocator.getFileAssetAPI().getRealAssetPathTmpBinary()
+                                    + java.io.File.separator + user.getUserId() + java.io.File.separator
+                                    + field.getFieldContentlet()
+                                    + java.io.File.separator + shortFileName.trim());
+
+                    try {
+
+                        FileUtil.copyFile(inputFile, binaryFile);
+                        translatedContent.setBinary(field.getVelocityVarName(), binaryFile);
+                    } catch (IOException e) {
+                        throw new TranslationException(e);
+                    }
                 }
+            } else if (field.getFieldType()
+                    .equals(com.dotmarketing.portlets.structure.model.Field.FieldType.TAG.toString())) {
+
+                translatedContent.setStringProperty(field.getVelocityVarName(),
+                        sourceContentlet.getStringProperty(field.getVelocityVarName()));
             }
-
-            page++;
         }
-
-
-        return context;
-    }
-
-    String getAITranslationTemplate(String hostId) {
-        if (UtilMethods.isSet(() -> AIUtil.getSecrets(hostId).get(AI_TRANSLATION_PROMPT_KEY).getString())) {
-            return AIUtil.getSecrets(hostId).get(AI_TRANSLATION_PROMPT_KEY).getString();
-        }
-
-
-        return Try.of(()->{
-            try (InputStream in = OpenAIVisionAPIImpl.class.getResourceAsStream("/default-translation-prompt.vtl")) {
-                return new String(in.readAllBytes());
-            }
-        }).getOrNull();
-
-
-    }
-
-    int getMaxTokens(String hostId) {
-
-        return Try.of(()->Integer.parseInt(AIUtil.getSecrets(hostId).get(AI_TRANSLATIONS_MAX_TOKENS).getString()))
-                .getOrElse(10000);
-
-
-    }
-
-    String getTranslationModel(String hostId) {
-
-        if (UtilMethods.isSet(() -> AIUtil.getSecrets(hostId).get(AI_TRANSLATION_MODEL_KEY).getString())) {
-            return AIUtil.getSecrets(hostId).get(AI_TRANSLATION_MODEL_KEY).getString();
-        }
-        return "gpt-4o";
     }
 }
