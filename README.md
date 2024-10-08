@@ -2,7 +2,7 @@
 
 ## Overview
 
-The OpenAI Vision and Translation Plugin is designed to use OpenAI's newer models to automatically tag images, add alt text descriptions and translate content in your DotCMS instance. This plugin leverages OpenAI's vision and json_formation capabilities to enhance the localization, accessibility and searchability of your content.
+The OpenAI Vision and Translation Plugin is designed to use OpenAI's newer models to automatically tag images, add alt text descriptions and translate content in your DotCMS instance. This plugin leverages OpenAI's vision and json_format capabilities to enhance the localization, accessibility and searchability of your content.
 
 ## Features
 
