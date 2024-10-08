@@ -1,39 +1,14 @@
-# OpenAI Vision Plugin
+# OpenAI Vision/Translation Plugin
 
 ## Overview
 
-The OpenAI Vision Plugin is designed to automatically tag images and add alt text descriptions to content in your DotCMS instance. This plugin leverages OpenAI's vision capabilities to enhance the accessibility and searchability of your content.
+The OpenAI Vision and Translation Plugin is designed to use OpenAI's newer models to automatically tag images, add alt text descriptions and translate content in your DotCMS instance. This plugin leverages OpenAI's vision and json_formation capabilities to enhance the localization, accessibility and searchability of your content.
 
 ## Features
 
 - **Auto-Tagging**: Automatically tags images based on their content.
 - **Alt Text Generation**: Generates and adds alt text descriptions to images.
-- **Workflow Integration**: Integrates with DotCMS workflows to tag and add alt text during content publishing.
-
-## Requirements
-
-- Java
-- Maven
-- DotCMS
-- OpenAI API Key
-
-## Installation
-
-1. **Clone the repository**:
-    ```sh
-    git clone <repository-url>
-    cd <repository-directory>
-    ```
-
-2. **Build the project**:
-    ```sh
-    ./mnnw clean install
-    ```
-
-3. **Deploy the plugin**:
-    - Upload the generated JAR file from the `target` directory to your dotCMS plugins.
-
-4. **Restart DotCMS** to load the new plugin.
+- **Content Translation**: Integrates with DotCMS workflows to translate content, including WYSIWYG and Block Editor content into multiple languages.  Supports a  lookup table for industry specific term translations.
 
 ## Image Auto-Tagging and Descriptions
 
@@ -41,7 +16,7 @@ The OpenAI Vision Plugin is designed to automatically tag images and add alt tex
     - Navigate to the DotCMS admin panel.
     - Go to `Apps` Screen and 
     - Add your OpenAI API key under the `dotAI` settings.
-    - **Important:** Make sure you set dotAI to use a model that supports AI vision (gpt-4o, etc).
+    - **Important:** Make sure you set dotAI to use a model that supports AI vision (**gpt-4o***, etc).
 
 2. **Configure Auto Tagging**:
     - dotAI Auto Tagging looks for two field variables, `dotAITagSrc` and `dotAIDescriptionSrc`.  These field variables determine which fields should be auto-tag/auto-alt and which image should be read as the source of those values.  The value of the variables is the field you want to use as the source image to be read.
@@ -60,10 +35,8 @@ The plugin also provides a workflow action that will auto-tag content as well if
     - Edit the desired workflow and add the `Open AI Auto-Tag Images` actionlet to the appropriate steps.
 ### Configs
 
-- `AI_VISION_ALT_TEXT_OPTIONS` - Fields to write the alt text to - defaults to `altText,alt,description`
 - `AI_VISION_MODEL` - The model to use for AI vision - defaults to `gpt-4o`
 - `AI_VISION_MAX_TOKENS` - The maximum number of tokens to generate for the alt text - defaults to `500`
-- `AI_VISION_AUTOTAG_CONTENTTYPES` - The content types to auto-tag - defaults to `image`
 
 
 ## OpenAI Translations
@@ -83,6 +56,29 @@ You can also specify which language properties you want to include to be used as
 - AI_TRANSLATIONS_MAX_TOKENS = // not set;
 - AI_TRANSLATION_TEMPERATURE = .01f
 - AI_TRANSLATION_RESPONSE_FORMAT = "json_format" // uses the new json response format.
+
+## Requirements
+
+- Java
+- Maven
+- DotCMS
+- OpenAI API Key
+
+## Installation
+
+1. **Clone the repository**:
+    ```sh
+    git clone https://github.com/dotCMS/com.dotcms.ai.v2.git
+    cd com.dotcms.ai.v2
+    ```
+
+2. **Build the project**:
+    ```sh
+    ./mnnw clean install
+    ```
+
+3. **Deploy the plugin**:
+   - Upload the generated JAR file from the `target` directory to your dotCMS plugins.
 
 
 ## Development
