@@ -216,16 +216,23 @@ public class OpenAITranslationService extends AbstractTranslationService {
 
     Map<String, String> getTranslationKeys(Optional<String> prefixIn, long originalLang, long langToTranslate) {
 
+        if(prefixIn.isEmpty() || UtilMethods.isEmpty(prefixIn.get())){
+            return Map.of();
+        }
+
+
+
         if (originalLang == langToTranslate) {
             throw new DotRuntimeException("Cannot translate contentlet to the same language: " + langToTranslate);
         }
 
         final StringBuilder query = new StringBuilder()
-                .append("+baseType:" + BaseContentType.KEY_VALUE.getType());
-        if(prefixIn.isPresent()&& !"*".equals(prefixIn.get())){
-            query.append(" +key_dotraw:");
-            query.append(prefixIn.get());
-            query.append("*");
+                .append("+baseType:")
+                .append(BaseContentType.KEY_VALUE.getType());
+        if (!"*".equals(prefixIn.get())) {
+            query.append(" +key_dotraw:")
+                    .append(prefixIn.get())
+                    .append("*");
         }
         query.append(" +languageId:(")
                 .append(originalLang)
@@ -241,19 +248,18 @@ public class OpenAITranslationService extends AbstractTranslationService {
         while (context.size() < MAX_LANGUAGE_VARIABLE_CONTEXT) {
             int myPage = page;
             List<Contentlet> contentResults = Try.of(() -> APILocator.getContentletAPI()
-                    .search(query.toString(), limit, myPage * limit, "identifier,languageid", APILocator.systemUser(),
+                    .search(queryStr, limit, myPage * limit, "identifier,languageid", APILocator.systemUser(),
                             false)).getOrElse(List.of());
             if (contentResults.isEmpty()) {
                 break;
             }
-            for (int i = 0; i < contentResults.size(); i++) {
+            for (int i = 0; i < contentResults.size() - 1; i++) {
                 Contentlet workingCon = contentResults.get(i);
-                final int iPlusOne = i + 1;
-                Contentlet nextCon = Try.of(() -> contentResults.get(iPlusOne)).getOrNull();
+                Contentlet nextCon = contentResults.get(i + 1);
 
                 if (UtilMethods.isEmpty(() -> workingCon.getIdentifier()) || UtilMethods.isEmpty(
                         () -> nextCon.getIdentifier())) {
-                    break;
+                    continue;
                 }
                 if (workingCon.getIdentifier().equals(nextCon.getIdentifier())) {
                     if (workingCon.getLanguageId() == originalLang) {
