@@ -21,6 +21,7 @@ public class Activator extends GenericBundleActivator {
 
 
     public void start(BundleContext context) throws Exception {
+        this.initializeServices(context);
 
         // Register Embedding Actionlet
         actionlets.forEach(a -> this.registerActionlet(context, a));
